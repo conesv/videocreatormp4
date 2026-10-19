@@ -1,6 +1,8 @@
 # Generador de videos por fecha
 
-Coloca las fotos en la carpeta `imagenes` junto al proyecto y ejecuta la aplicación. Se generará `video.mp4` en orden cronológico.
+Coloca las fotos en la carpeta `imagenes` junto al proyecto. Escribe el nombre deseado en `imagenes/nombre-video.txt` y ejecuta la aplicación; el MP4 se guardará en la raíz del proyecto con ese nombre.
+
+El nombre puede llevar o no la extensión `.mp4`. Los caracteres no válidos en Windows (`< > : " / \ | ? *` y controles) se reemplazan por `-`; los nombres reservados, como `CON`, también se ajustan. Si el archivo está vacío, se usa `video.mp4`.
 
 La fecha de orden se toma de EXIF `DateTimeOriginal`. Si una imagen no tiene esa etiqueta o no se puede leer, se usa la fecha de última modificación del archivo. En fechas iguales, se ordena por nombre.
 

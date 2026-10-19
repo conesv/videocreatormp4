@@ -5,13 +5,16 @@ import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Stream;
+import java.util.regex.Pattern;
 
 import javax.imageio.ImageIO;
 
@@ -23,6 +26,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import com.drew.imaging.ImageMetadataReader;
@@ -30,9 +34,12 @@ import com.drew.metadata.Metadata;
 import com.drew.metadata.exif.ExifSubIFDDirectory;
 
 @Component
+@ConditionalOnProperty(name = "video.generator.enabled", havingValue = "true", matchIfMissing = true)
 public class PhotoVideoGenerator implements CommandLineRunner {
 	private static final Logger logger = LoggerFactory.getLogger(PhotoVideoGenerator.class);
 	private static final Set<String> IMAGE_EXTENSIONS = Set.of("jpg", "jpeg", "png", "bmp", "gif");
+	private static final Pattern INVALID_FILENAME_CHARACTERS = Pattern.compile("[<>:\"/\\\\|?*\\p{Cntrl}]");
+	private static final Pattern RESERVED_FILENAME = Pattern.compile("(?i)(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])");
 
 	@Value("${video.input-dir:imagenes}")
 	private String inputDirectory;
@@ -78,13 +85,37 @@ public class PhotoVideoGenerator implements CommandLineRunner {
 			return;
 		}
 
-		Path output = Path.of(outputFile).toAbsolutePath();
+		Path output = resolveOutputPath(directory);
 		Path parent = output.getParent();
 		if (parent != null) {
 			Files.createDirectories(parent);
 		}
 		createVideo(photos, output);
 		logger.info("Video creado: {} ({} imágenes)", output, photos.size());
+	}
+
+	private Path resolveOutputPath(Path imageDirectory) throws IOException {
+		Path nameFile = imageDirectory.resolve("nombre-video.txt");
+		String requestedName = Files.exists(nameFile)
+			? Files.readString(nameFile, StandardCharsets.UTF_8).strip()
+			: "";
+		String safeName = sanitizeVideoName(requestedName);
+		return Path.of(outputFile).toAbsolutePath().resolveSibling(safeName + ".mp4");
+	}
+
+	static String sanitizeVideoName(String requestedName) {
+		String name = requestedName == null ? "" : requestedName.strip();
+		if (name.toLowerCase(Locale.ROOT).endsWith(".mp4")) {
+			name = name.substring(0, name.length() - 4);
+		}
+		name = INVALID_FILENAME_CHARACTERS.matcher(name).replaceAll("-").replaceAll("[. ]+$", "-");
+		if (name.isBlank()) {
+			return "video";
+		}
+		if (RESERVED_FILENAME.matcher(name).matches()) {
+			return "-" + name;
+		}
+		return name;
 	}
 
 	private Photo photoWithCaptureTime(Path path) {
